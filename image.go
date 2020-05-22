@@ -8,6 +8,7 @@ import (
 	"image"
 	"image/color"
 	"io/ioutil"
+	"log"
 	"math"
 	"path/filepath"
 )
@@ -189,9 +190,16 @@ func getMatchingLocation(matImage gocv.Mat, matTpl gocv.Mat, confidence float32,
 	var val float32
 	val, loc = getValLoc(minVal, maxVal, minLoc, maxLoc, matchMode)
 
+	if debug == DmEachMatch {
+		log.Println(fmt.Sprintf(dmOutputMsg, val, confidence))
+	}
+
 	if val >= confidence {
 		return loc, nil
 	} else {
+		if debug == DmNotMatch {
+			log.Println(fmt.Sprintf(dmOutputMsg, val, confidence))
+		}
 		return image.Point{}, errors.New("no such target search image")
 	}
 }
