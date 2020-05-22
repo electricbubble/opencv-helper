@@ -35,15 +35,15 @@ const DefaultMatchMode = TmCcoeffNormed
 
 var fillColor = color.RGBA{R: 255, G: 255, B: 255, A: 0}
 
-func FindImageLocationFromRaw(source, search *bytes.Buffer, confidence float32, matchMode ...TemplateMatchMode) (loc image.Point, err error) {
+func FindImageLocationFromRaw(source, search *bytes.Buffer, threshold float32, matchMode ...TemplateMatchMode) (loc image.Point, err error) {
 	var pathnameImage, pathnameTpl string
 	if pathnameImage, pathnameTpl, err = checkAndSave(source, search); err != nil {
 		return image.Point{}, err
 	}
-	return FindImageLocationFromDisk(pathnameImage, pathnameTpl, confidence, matchMode...)
+	return FindImageLocationFromDisk(pathnameImage, pathnameTpl, threshold, matchMode...)
 }
 
-func FindImageLocationFromDisk(source, search string, confidence float32, matchMode ...TemplateMatchMode) (loc image.Point, err error) {
+func FindImageLocationFromDisk(source, search string, threshold float32, matchMode ...TemplateMatchMode) (loc image.Point, err error) {
 	if len(matchMode) == 0 {
 		matchMode = []TemplateMatchMode{DefaultMatchMode}
 	}
@@ -56,10 +56,10 @@ func FindImageLocationFromDisk(source, search string, confidence float32, matchM
 		_ = matTpl.Close()
 	}()
 
-	return getMatchingLocation(matImage, matTpl, confidence, matchMode[0])
+	return getMatchingLocation(matImage, matTpl, threshold, matchMode[0])
 }
 
-func FindAllImageLocationsFromDisk(source, search string, confidence float32, matchMode ...TemplateMatchMode) (locs []image.Point, err error) {
+func FindAllImageLocationsFromDisk(source, search string, threshold float32, matchMode ...TemplateMatchMode) (locs []image.Point, err error) {
 	if len(matchMode) == 0 {
 		matchMode = []TemplateMatchMode{DefaultMatchMode}
 	}
@@ -73,7 +73,7 @@ func FindAllImageLocationsFromDisk(source, search string, confidence float32, ma
 	}()
 
 	var loc image.Point
-	if loc, err = getMatchingLocation(matImage, matTpl, confidence, matchMode[0]); err != nil {
+	if loc, err = getMatchingLocation(matImage, matTpl, threshold, matchMode[0]); err != nil {
 		return nil, err
 	}
 	widthTpl := matTpl.Cols()
@@ -84,8 +84,8 @@ func FindAllImageLocationsFromDisk(source, search string, confidence float32, ma
 
 	gocv.FillPoly(&matImage, getPts(loc, widthTpl, heightTpl), fillColor)
 
-	loc, err = getMatchingLocation(matImage, matTpl, confidence, matchMode[0])
-	for ; err == nil; loc, err = getMatchingLocation(matImage, matTpl, confidence, matchMode[0]) {
+	loc, err = getMatchingLocation(matImage, matTpl, threshold, matchMode[0])
+	for ; err == nil; loc, err = getMatchingLocation(matImage, matTpl, threshold, matchMode[0]) {
 		locs = append(locs, loc)
 		gocv.FillPoly(&matImage, getPts(loc, widthTpl, heightTpl), fillColor)
 	}
@@ -105,7 +105,7 @@ func getPts(loc image.Point, width, height int) [][]image.Point {
 	}
 }
 
-func FindImageRectFromDisk(source, search string, confidence float32, matchMode ...TemplateMatchMode) (rect image.Rectangle, err error) {
+func FindImageRectFromDisk(source, search string, threshold float32, matchMode ...TemplateMatchMode) (rect image.Rectangle, err error) {
 	var matTpl gocv.Mat
 	if _, matTpl, err = getMats(source, search, gocv.IMReadGrayScale); err != nil {
 		return image.Rectangle{}, err
@@ -115,14 +115,14 @@ func FindImageRectFromDisk(source, search string, confidence float32, matchMode 
 	}()
 
 	var loc image.Point
-	if loc, err = FindImageLocationFromDisk(source, search, confidence, matchMode...); err != nil {
+	if loc, err = FindImageLocationFromDisk(source, search, threshold, matchMode...); err != nil {
 		return image.Rectangle{}, err
 	}
 	rect = image.Rect(loc.X, loc.Y, loc.X+matTpl.Cols(), loc.Y+matTpl.Rows())
 	return
 }
 
-func FindAllImageRectsFromDisk(source, search string, confidence float32, matchMode ...TemplateMatchMode) (rects []image.Rectangle, err error) {
+func FindAllImageRectsFromDisk(source, search string, threshold float32, matchMode ...TemplateMatchMode) (rects []image.Rectangle, err error) {
 	var matTpl gocv.Mat
 	if _, matTpl, err = getMats(source, search, gocv.IMReadGrayScale); err != nil {
 		return nil, err
@@ -132,7 +132,7 @@ func FindAllImageRectsFromDisk(source, search string, confidence float32, matchM
 	}()
 
 	var locs []image.Point
-	if locs, err = FindAllImageLocationsFromDisk(source, search, confidence, matchMode...); err != nil {
+	if locs, err = FindAllImageLocationsFromDisk(source, search, threshold, matchMode...); err != nil {
 		return nil, err
 	}
 
@@ -175,9 +175,9 @@ func getMats(nameImage, nameTpl string, flags gocv.IMReadFlag) (matImage, matTpl
 }
 
 // getMatchingLocation 获取匹配的图片位置
-func getMatchingLocation(matImage gocv.Mat, matTpl gocv.Mat, confidence float32, matchMode TemplateMatchMode) (loc image.Point, err error) {
-	if confidence > 1 {
-		confidence = 1.0
+func getMatchingLocation(matImage gocv.Mat, matTpl gocv.Mat, threshold float32, matchMode TemplateMatchMode) (loc image.Point, err error) {
+	if threshold > 1 {
+		threshold = 1.0
 	}
 	// TM_SQDIFF：该方法使用平方差进行匹配，最好匹配为 0。值越大匹配结果越差。
 	// TM_SQDIFF_NORMED：该方法使用归一化的平方差进行匹配，最佳匹配也在结果为0处。
@@ -191,14 +191,14 @@ func getMatchingLocation(matImage gocv.Mat, matTpl gocv.Mat, confidence float32,
 	val, loc = getValLoc(minVal, maxVal, minLoc, maxLoc, matchMode)
 
 	if debug == DmEachMatch {
-		log.Println(fmt.Sprintf(dmOutputMsg, val, confidence))
+		log.Println(fmt.Sprintf(dmOutputMsg, val, threshold))
 	}
 
-	if val >= confidence {
+	if val >= threshold {
 		return loc, nil
 	} else {
 		if debug == DmNotMatch {
-			log.Println(fmt.Sprintf(dmOutputMsg, val, confidence))
+			log.Println(fmt.Sprintf(dmOutputMsg, val, threshold))
 		}
 		return image.Point{}, errors.New("no such target search image")
 	}
