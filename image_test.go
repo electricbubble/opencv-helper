@@ -6,17 +6,10 @@ import (
 	"image"
 	"image/color"
 	"io/ioutil"
-	"log"
 	"sort"
 	"strconv"
 	"testing"
 )
-
-func init() {
-	if err := StoreDirectory("/Users/hero/Documents/temp/2020-05"); err != nil {
-		log.Fatalln(err)
-	}
-}
 
 func TestFindImageLocation(t *testing.T) {
 	pathSource := "/Users/hero/Documents/temp/2020-05/opencv/Snipaste_2020-05-18_16-20-31.png"
@@ -155,6 +148,93 @@ func TestFindAllImageRectsFromDisk(t *testing.T) {
 	rects, err := FindAllImageRectsFromDisk(pathSource, pathSearch, 0.95)
 	checkErr(t, err)
 	t.Log(rects)
+
+	// return
+
+	window := gocv.NewWindow("Find Image")
+	defer window.Close()
+	blue := color.RGBA{R: 0, G: 0, B: 255, A: 0}
+	matBig := gocv.IMRead(pathSource, gocv.IMReadColor)
+	for i := range rects {
+		gocv.Rectangle(&matBig, rects[i], blue, 3)
+		gocv.PutText(&matBig, strconv.FormatInt(int64(i), 10), rects[i].Min, gocv.FontHersheySimplex, 2, blue, 3)
+	}
+
+	for {
+		window.IMShow(matBig)
+		if window.WaitKey(1) >= 0 {
+			break
+		}
+	}
+}
+
+func TestFindImageLocationFromRaw(t *testing.T) {
+	pathSource := "/Users/hero/Documents/temp/2020-05/opencv/Snipaste_2020-05-18_16-20-31.png"
+	pathSearch := "/Users/hero/Documents/temp/2020-05/opencv/Snipaste.png"
+
+	// pathSource = "/Users/hero/Documents/temp/2020-05/opencv/IMG_5291.jpg"
+	// pathSearch = "/Users/hero/Documents/temp/2020-05/opencv/IMG_5.png"
+
+	fileSource, err := ioutil.ReadFile(pathSource)
+	checkErr(t, err)
+	fileSearch, err := ioutil.ReadFile(pathSearch)
+	checkErr(t, err)
+	bufferSource := bytes.NewBuffer(fileSource)
+	bufferSearch := bytes.NewBuffer(fileSearch)
+	_, _ = bufferSource, bufferSearch
+
+	var imgLoc image.Point
+	// imgLoc, err := FindImageLocationFromRaw(bufferSource, bufferSearch, 0.95)
+	imgLoc, err = FindImageLocationFromRaw(bufferSource, bufferSearch, 0.95, TmSqdiff)
+	checkErr(t, err)
+	t.Log(imgLoc)
+
+	t.Log(FindImageRectFromRaw(bufferSource, bufferSearch, 0.95, TmSqdiff))
+
+	window := gocv.NewWindow("Find Image")
+	defer window.Close()
+	blue := color.RGBA{R: 0, G: 0, B: 255, A: 0}
+	matBig := gocv.IMRead(pathSource, gocv.IMReadColor)
+	matTpl := gocv.IMRead(pathSearch, gocv.IMReadColor)
+	rect := image.Rect(imgLoc.X, imgLoc.Y, imgLoc.X+matTpl.Cols(), imgLoc.Y+matTpl.Rows())
+	gocv.Rectangle(&matBig, rect, blue, 3)
+	for {
+		window.IMShow(matBig)
+		if window.WaitKey(1) >= 0 {
+			break
+		}
+	}
+}
+
+func TestFindAllImageRectsFromRaw(t *testing.T) {
+	pathSource := "/Users/hero/Documents/temp/2020-05/opencv/Snipaste_2020-05-18_16-20-31.png"
+	pathSearch := "/Users/hero/Documents/temp/2020-05/opencv/Snipaste.png"
+
+	pathSource = "/Users/hero/Documents/temp/2020-05/opencv/IMG_5291.jpg"
+	pathSearch = "/Users/hero/Documents/temp/2020-05/opencv/IMG_5.png"
+
+	fileSource, err := ioutil.ReadFile(pathSource)
+	checkErr(t, err)
+	fileSearch, err := ioutil.ReadFile(pathSearch)
+	checkErr(t, err)
+	bufferSource := bytes.NewBuffer(fileSource)
+	bufferSearch := bytes.NewBuffer(fileSearch)
+	_, _ = bufferSource, bufferSearch
+
+	rects, err := FindAllImageRectsFromRaw(bufferSource, bufferSearch, 0.95)
+	checkErr(t, err)
+	t.Log(rects)
+
+	sort.Slice(rects, func(i, j int) bool {
+		if rects[i].Min.Y < rects[j].Min.Y {
+			return true
+		} else if rects[i].Min.Y == rects[j].Min.Y {
+			if rects[i].Min.X < rects[j].Min.X {
+				return true
+			}
+		}
+		return false
+	})
 
 	// return
 

@@ -7,10 +7,8 @@ import (
 	"gocv.io/x/gocv"
 	"image"
 	"image/color"
-	"io/ioutil"
 	"log"
 	"math"
-	"path/filepath"
 )
 
 // TemplateMatchMode is the type of the template matching operation.
@@ -36,11 +34,18 @@ const DefaultMatchMode = TmCcoeffNormed
 var fillColor = color.RGBA{R: 255, G: 255, B: 255, A: 0}
 
 func FindImageLocationFromRaw(source, search *bytes.Buffer, threshold float32, matchMode ...TemplateMatchMode) (loc image.Point, err error) {
-	var pathnameImage, pathnameTpl string
-	if pathnameImage, pathnameTpl, err = checkAndSave(source, search); err != nil {
+	if len(matchMode) == 0 {
+		matchMode = []TemplateMatchMode{DefaultMatchMode}
+	}
+	var matImage, matTpl gocv.Mat
+	if matImage, matTpl, err = getMatsFromRaw(source, search, gocv.IMReadGrayScale); err != nil {
 		return image.Point{}, err
 	}
-	return FindImageLocationFromDisk(pathnameImage, pathnameTpl, threshold, matchMode...)
+	defer func() {
+		_ = matImage.Close()
+		_ = matTpl.Close()
+	}()
+	return getMatchingLocation(matImage, matTpl, threshold, matchMode[0])
 }
 
 func FindImageLocationFromDisk(source, search string, threshold float32, matchMode ...TemplateMatchMode) (loc image.Point, err error) {
@@ -48,7 +53,7 @@ func FindImageLocationFromDisk(source, search string, threshold float32, matchMo
 		matchMode = []TemplateMatchMode{DefaultMatchMode}
 	}
 	var matImage, matTpl gocv.Mat
-	if matImage, matTpl, err = getMats(source, search, gocv.IMReadGrayScale); err != nil {
+	if matImage, matTpl, err = getMatsFromDisk(source, search, gocv.IMReadGrayScale); err != nil {
 		return image.Point{}, err
 	}
 	defer func() {
@@ -64,7 +69,41 @@ func FindAllImageLocationsFromDisk(source, search string, threshold float32, mat
 		matchMode = []TemplateMatchMode{DefaultMatchMode}
 	}
 	var matImage, matTpl gocv.Mat
-	if matImage, matTpl, err = getMats(source, search, gocv.IMReadGrayScale); err != nil {
+	if matImage, matTpl, err = getMatsFromDisk(source, search, gocv.IMReadGrayScale); err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = matImage.Close()
+		_ = matTpl.Close()
+	}()
+
+	var loc image.Point
+	if loc, err = getMatchingLocation(matImage, matTpl, threshold, matchMode[0]); err != nil {
+		return nil, err
+	}
+	widthTpl := matTpl.Cols()
+	heightTpl := matTpl.Rows()
+
+	locs = make([]image.Point, 0, 9)
+	locs = append(locs, loc)
+
+	gocv.FillPoly(&matImage, getPts(loc, widthTpl, heightTpl), fillColor)
+
+	loc, err = getMatchingLocation(matImage, matTpl, threshold, matchMode[0])
+	for ; err == nil; loc, err = getMatchingLocation(matImage, matTpl, threshold, matchMode[0]) {
+		locs = append(locs, loc)
+		gocv.FillPoly(&matImage, getPts(loc, widthTpl, heightTpl), fillColor)
+	}
+
+	return locs, nil
+}
+
+func FindAllImageLocationsFromRaw(source, search *bytes.Buffer, threshold float32, matchMode ...TemplateMatchMode) (locs []image.Point, err error) {
+	if len(matchMode) == 0 {
+		matchMode = []TemplateMatchMode{DefaultMatchMode}
+	}
+	var matImage, matTpl gocv.Mat
+	if matImage, matTpl, err = getMatsFromRaw(source, search, gocv.IMReadGrayScale); err != nil {
 		return nil, err
 	}
 	defer func() {
@@ -107,7 +146,7 @@ func getPts(loc image.Point, width, height int) [][]image.Point {
 
 func FindImageRectFromDisk(source, search string, threshold float32, matchMode ...TemplateMatchMode) (rect image.Rectangle, err error) {
 	var matTpl gocv.Mat
-	if _, matTpl, err = getMats(source, search, gocv.IMReadGrayScale); err != nil {
+	if _, matTpl, err = getMatsFromDisk(source, search, gocv.IMReadGrayScale); err != nil {
 		return image.Rectangle{}, err
 	}
 	defer func() {
@@ -124,7 +163,7 @@ func FindImageRectFromDisk(source, search string, threshold float32, matchMode .
 
 func FindAllImageRectsFromDisk(source, search string, threshold float32, matchMode ...TemplateMatchMode) (rects []image.Rectangle, err error) {
 	var matTpl gocv.Mat
-	if _, matTpl, err = getMats(source, search, gocv.IMReadGrayScale); err != nil {
+	if _, matTpl, err = getMatsFromDisk(source, search, gocv.IMReadGrayScale); err != nil {
 		return nil, err
 	}
 	defer func() {
@@ -144,25 +183,47 @@ func FindAllImageRectsFromDisk(source, search string, threshold float32, matchMo
 	return
 }
 
-// checkAndSave 检查保存路径并保存原图和目标图到该路径下
-func checkAndSave(source, search *bytes.Buffer) (pathnameImage, pathnameTpl string, err error) {
-	if err = checkStoreDirectory(); err != nil {
-		return "", "", err
+func FindImageRectFromRaw(source, search *bytes.Buffer, threshold float32, matchMode ...TemplateMatchMode) (rect image.Rectangle, err error) {
+	var matTpl gocv.Mat
+	if _, matTpl, err = getMatsFromRaw(source, search, gocv.IMReadGrayScale); err != nil {
+		return image.Rectangle{}, err
 	}
-	pathnameImage = filepath.Join(storeDirectory, GenFilename())
-	if err = ioutil.WriteFile(pathnameImage, source.Bytes(), 0666); err != nil {
-		return "", "", err
-	}
-	pathnameTpl = filepath.Join(storeDirectory, GenFilename())
-	if err = ioutil.WriteFile(pathnameTpl, search.Bytes(), 0666); err != nil {
-		return "", "", err
-	}
+	defer func() {
+		_ = matTpl.Close()
+	}()
 
+	var loc image.Point
+	if loc, err = FindImageLocationFromRaw(source, search, threshold, matchMode...); err != nil {
+		return image.Rectangle{}, err
+	}
+	rect = image.Rect(loc.X, loc.Y, loc.X+matTpl.Cols(), loc.Y+matTpl.Rows())
 	return
 }
 
-// getMats 从指定路径获取原图和目标图的 `gocv.Mat`
-func getMats(nameImage, nameTpl string, flags gocv.IMReadFlag) (matImage, matTpl gocv.Mat, err error) {
+func FindAllImageRectsFromRaw(source, search *bytes.Buffer, threshold float32, matchMode ...TemplateMatchMode) (rects []image.Rectangle, err error) {
+	var matTpl gocv.Mat
+	if _, matTpl, err = getMatsFromRaw(source, search, gocv.IMReadGrayScale); err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = matTpl.Close()
+	}()
+
+	var locs []image.Point
+	if locs, err = FindAllImageLocationsFromRaw(source, search, threshold, matchMode...); err != nil {
+		return nil, err
+	}
+
+	rects = make([]image.Rectangle, 0, len(locs))
+	for i := range locs {
+		r := image.Rect(locs[i].X, locs[i].Y, locs[i].X+matTpl.Cols(), locs[i].Y+matTpl.Rows())
+		rects = append(rects, r)
+	}
+	return
+}
+
+// getMatsFromDisk 从指定路径获取原图和目标图的 `gocv.Mat`
+func getMatsFromDisk(nameImage, nameTpl string, flags gocv.IMReadFlag) (matImage, matTpl gocv.Mat, err error) {
 	matImage = gocv.IMRead(nameImage, flags)
 	if matImage.Empty() {
 		return gocv.Mat{}, gocv.Mat{}, fmt.Errorf("invalid read %s", nameImage)
@@ -170,6 +231,45 @@ func getMats(nameImage, nameTpl string, flags gocv.IMReadFlag) (matImage, matTpl
 	matTpl = gocv.IMRead(nameTpl, flags)
 	if matTpl.Empty() {
 		return gocv.Mat{}, gocv.Mat{}, fmt.Errorf("invalid read %s", nameTpl)
+	}
+	return
+}
+
+// func getBufsFromDisk(nameImage, nameTpl string) (bufImage, bufTpl *bytes.Buffer, err error) {
+// 	getBuf := func(_name string) (*bytes.Buffer, error) {
+// 		var f *os.File
+// 		var e error
+// 		if f, e = os.Open(_name); e != nil {
+// 			return nil, e
+// 		}
+// 		var all []byte
+// 		if all, e = ioutil.ReadAll(f); e != nil {
+// 			return nil, e
+// 		}
+// 		return bytes.NewBuffer(all), nil
+// 	}
+// 	if bufImage, err = getBuf(nameImage); err != nil {
+// 		return nil, nil, err
+// 	}
+// 	if bufTpl, err = getBuf(nameTpl); err != nil {
+// 		return nil, nil, err
+// 	}
+// 	return
+// }
+
+// getMatsFromRaw 获取原图和目标图的 `gocv.Mat`
+func getMatsFromRaw(bufImage, bufTpl *bytes.Buffer, flags gocv.IMReadFlag) (matImage, matTpl gocv.Mat, err error) {
+	if matImage, err = gocv.IMDecode(bufImage.Bytes(), flags); err != nil {
+		return gocv.Mat{}, gocv.Mat{}, fmt.Errorf("invalid read %w", err)
+	}
+	if matImage.Empty() {
+		return gocv.Mat{}, gocv.Mat{}, errors.New("invalid read [source]")
+	}
+	if matTpl, err = gocv.IMDecode(bufTpl.Bytes(), flags); err != nil {
+		return gocv.Mat{}, gocv.Mat{}, fmt.Errorf("invalid read %w", err)
+	}
+	if matTpl.Empty() {
+		return gocv.Mat{}, gocv.Mat{}, errors.New("invalid read [template]")
 	}
 	return
 }
