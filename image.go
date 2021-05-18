@@ -87,12 +87,12 @@ func FindAllImageLocationsFromDisk(source, search string, threshold float32, mat
 	locs = make([]image.Point, 0, 9)
 	locs = append(locs, loc)
 
-	gocv.FillPoly(&matImage, getPts(loc, widthTpl, heightTpl), fillColor)
+	gocv.FillPoly(&matImage, gocv.NewPointsVectorFromPoints(getPts(loc, widthTpl, heightTpl)), fillColor)
 
 	loc, err = getMatchingLocation(matImage, matTpl, threshold, matchMode[0])
 	for ; err == nil; loc, err = getMatchingLocation(matImage, matTpl, threshold, matchMode[0]) {
 		locs = append(locs, loc)
-		gocv.FillPoly(&matImage, getPts(loc, widthTpl, heightTpl), fillColor)
+		gocv.FillPoly(&matImage, gocv.NewPointsVectorFromPoints(getPts(loc, widthTpl, heightTpl)), fillColor)
 	}
 
 	return locs, nil
@@ -121,12 +121,12 @@ func FindAllImageLocationsFromRaw(source, search *bytes.Buffer, threshold float3
 	locs = make([]image.Point, 0, 9)
 	locs = append(locs, loc)
 
-	gocv.FillPoly(&matImage, getPts(loc, widthTpl, heightTpl), fillColor)
+	gocv.FillPoly(&matImage, gocv.NewPointsVectorFromPoints(getPts(loc, widthTpl, heightTpl)), fillColor)
 
 	loc, err = getMatchingLocation(matImage, matTpl, threshold, matchMode[0])
 	for ; err == nil; loc, err = getMatchingLocation(matImage, matTpl, threshold, matchMode[0]) {
 		locs = append(locs, loc)
-		gocv.FillPoly(&matImage, getPts(loc, widthTpl, heightTpl), fillColor)
+		gocv.FillPoly(&matImage, gocv.NewPointsVectorFromPoints(getPts(loc, widthTpl, heightTpl)), fillColor)
 	}
 
 	return locs, nil
