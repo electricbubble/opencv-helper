@@ -146,10 +146,11 @@ func getPts(loc image.Point, width, height int) [][]image.Point {
 
 func FindImageRectFromDisk(source, search string, threshold float32, matchMode ...TemplateMatchMode) (rect image.Rectangle, err error) {
 	var matTpl gocv.Mat
-	if _, matTpl, err = getMatsFromDisk(source, search, gocv.IMReadGrayScale); err != nil {
+	if matImage, matTpl, err = getMatsFromDisk(source, search, gocv.IMReadGrayScale); err != nil {
 		return image.Rectangle{}, err
 	}
 	defer func() {
+		_ = matImage.Close()
 		_ = matTpl.Close()
 	}()
 
