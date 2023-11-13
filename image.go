@@ -145,11 +145,12 @@ func getPts(loc image.Point, width, height int) [][]image.Point {
 }
 
 func FindImageRectFromDisk(source, search string, threshold float32, matchMode ...TemplateMatchMode) (rect image.Rectangle, err error) {
-	var matTpl gocv.Mat
-	if _, matTpl, err = getMatsFromDisk(source, search, gocv.IMReadGrayScale); err != nil {
+	var matImage,matTpl gocv.Mat
+	if matImage, matTpl, err = getMatsFromDisk(source, search, gocv.IMReadGrayScale); err != nil {
 		return image.Rectangle{}, err
 	}
 	defer func() {
+		_ = matImage.Close()
 		_ = matTpl.Close()
 	}()
 
@@ -162,11 +163,12 @@ func FindImageRectFromDisk(source, search string, threshold float32, matchMode .
 }
 
 func FindAllImageRectsFromDisk(source, search string, threshold float32, matchMode ...TemplateMatchMode) (rects []image.Rectangle, err error) {
-	var matTpl gocv.Mat
-	if _, matTpl, err = getMatsFromDisk(source, search, gocv.IMReadGrayScale); err != nil {
+	var matImage,matTpl gocv.Mat
+	if matImage, matTpl, err = getMatsFromDisk(source, search, gocv.IMReadGrayScale); err != nil {
 		return nil, err
 	}
 	defer func() {
+		_ = matImage.Close()
 		_ = matTpl.Close()
 	}()
 
@@ -184,11 +186,12 @@ func FindAllImageRectsFromDisk(source, search string, threshold float32, matchMo
 }
 
 func FindImageRectFromRaw(source, search *bytes.Buffer, threshold float32, matchMode ...TemplateMatchMode) (rect image.Rectangle, err error) {
-	var matTpl gocv.Mat
-	if _, matTpl, err = getMatsFromRaw(source, search, gocv.IMReadGrayScale); err != nil {
+	var matImage,matTpl gocv.Mat
+	if matImage, matTpl, err = getMatsFromRaw(source, search, gocv.IMReadGrayScale); err != nil {
 		return image.Rectangle{}, err
 	}
 	defer func() {
+		_ = matImage.Close()
 		_ = matTpl.Close()
 	}()
 
@@ -201,11 +204,12 @@ func FindImageRectFromRaw(source, search *bytes.Buffer, threshold float32, match
 }
 
 func FindAllImageRectsFromRaw(source, search *bytes.Buffer, threshold float32, matchMode ...TemplateMatchMode) (rects []image.Rectangle, err error) {
-	var matTpl gocv.Mat
-	if _, matTpl, err = getMatsFromRaw(source, search, gocv.IMReadGrayScale); err != nil {
+	var matImage,matTpl gocv.Mat
+	if matImage, matTpl, err = getMatsFromRaw(source, search, gocv.IMReadGrayScale); err != nil {
 		return nil, err
 	}
 	defer func() {
+		_ = matImage.Close()
 		_ = matTpl.Close()
 	}()
 
